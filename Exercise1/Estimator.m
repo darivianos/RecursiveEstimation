@@ -66,30 +66,111 @@ function [posEst,oriEst,radiusEst, posVar,oriVar,radiusVar,estState] = Estimator
 
 
 
-%% Mode 1: Initialization
-if (tm == 0)
-    % Do the initialization of your estimator here!
+if (designPart == 1)
+    % Mode 1: Initialization
+    if (tm == 0)
+        % Do the initialization of your estimator here!
+        % We initialize the initial nominal values
+        posEst = [0 0];
+        oriEst = 0;
+        posxVar = knownConst.TranslationStartBound * knownConst.TranslationStartBound / 3;
+        posyVar = posxVar;
+        posVar = [posxVar posyVar];
+        oriVar = knownConst.RotationStartBound * knownConst.RotationStartBound / 6;
+        radiusEst = knownConst.NominalWheelRadius;
+        radiusVar = knownConst.WheelRadiusError * knownConst.WheelRadiusError / 3;
+        % Keep the current state to be provided as an input to next iteration
+        estState.tm = tm;
+        estState.posEst = posEst;
+        estState.oriEst = oriEst;
+        estState.posVar = posVar;
+        estState.oriVar = oriVar;
+        estState.radiusEst = radiusEst;
+        estState.radiusVar = radiusVar;
+        return;
+    end
     
-    % Replace the following:
-    posEst = [0 0];
-    oriEst = 0;
-    posVar = [0 0];
-    oriVar = 0;
-    radiusEst = 0;
-    radiusVar = 0;
-    return;
+    
+    % Mode 2: Estimator iteration.
+    
+    % Prediction step, solve the three differential equations using ode45
+    Ts = tm - estState.tm;
+    % previous states
+    xprev = estState.posEst(1);
+    yprev = estState.posEst(2);
+    rprev = estState.oriEst;
+    wprev = estState.radiusEst;
+    
+    % input Signals
+    B = knownConst.WheelBase;
+    uv = actuate(1);
+    ur = actuate(2);
+    
+    % Differential equation for prediction of the states
+    [~,Y] = ode45(@(t,y) propState(t,y,uv,ur,B),[0 Ts],[xprev,yprev,rprev,wprev]);
+    outSize = size(Y,1);
+    xpred = Y(outSize,1);
+    ypred = Y(outSize,2);
+    rpred = Y(outSize,3);
+    wpred = Y(outSize,4);
+    
+    % Differential equation for prediction of Variances
+    A = [0, 0, -wprev*uv*cos(ur)*sin(rprev), uv*cos(ur)*cos(rprev);...
+        0, 0, wprev*uv*cos(ur)*cos(rprev), uv*cos(ur)*sin(rprev);...
+        0, 0, 0,  -uv * sin(ur)/B;...
+        0, 0, 0, 0];
+    
+    Pinit = [estState.posVar(1),0,0,0;...
+            0,estState.posVar(2),0,0;...
+            0,0,estState.oriVar,0;...
+            0,0,0,estState.radiusVar];
+  
+    [~,Yvar] = ode45(@(t,y) propVariance(t,y,A),[0 Ts],Pinit);
+    outSize = size(Yvar,1);
+    Ppred = [Yvar(outSize,1),Yvar(outSize,2),Yvar(outSize,3),Yvar(outSize,4);...
+        Yvar(outSize,5),Yvar(outSize,6),Yvar(outSize,7),Yvar(outSize,8);...
+        Yvar(outSize,9),Yvar(outSize,10),Yvar(outSize,11),Yvar(outSize,12);...
+        Yvar(outSize,13),Yvar(outSize,14),Yvar(outSize,15),Yvar(outSize,16)];
+    
+    % Update/Measurement Step
+    H = [xpred/sqrt(xpred*xpred + ypred*ypred), ypred/sqrt(xpred*xpred + ypred*ypred), 0, 0;...
+        0,0,1,0];
+    
+    R = [knownConst.DistNoise*knownConst.DistNoise/3, 0;...
+        0, knownConst.CompassNoise];
+    
+    K = Ppred * H' /(H * Ppred * H' + R);
+    if sense(1) == inf
+        sense(1) = sqrt(xpred*xpred + ypred*ypred);
+    end
+    if sense(2) == inf
+        sense(2) = rpred;
+    end
+    
+    e = [sense(1) - sqrt(xpred*xpred + ypred*ypred);...
+        sense(2) - rpred];
+    temp = K * e;
+    
+    posEst(1) = xpred + temp(1);
+    posEst(2) = ypred + temp(2);
+    oriEst = rpred + temp(3);
+    radiusEst = wpred + temp(4);
+    
+    Pmeas = (eye(4) - K*H) * Ppred;
+    
+    posVar(1) = Pmeas(1,1);
+    posVar(2) = Pmeas(2,2);
+    oriVar = Pmeas(3,3);
+    radiusVar = Pmeas(4,4);
+    
+    % Keep the current state to be provided as an input to next iteration
+    estState.tm = tm;
+    estState.posEst = posEst;
+    estState.oriEst = oriEst;
+    estState.posVar = posVar;
+    estState.oriVar = oriVar;
+    estState.radiusEst = radiusEst;
+    estState.radiusVar = radiusVar;
 end
 
-
-%% Mode 2: Estimator iteration.
-% If we get this far tm is not equal to zero, and we are no longer
-% initializing.  Run the estimator.
-
-% Replace the following:
-posEst = [0 0];
-oriEst = 0;
-posVar = [0 0];
-oriVar = 0;
-radiusEst = 0;
-radiusVar = 0;
-end
+return
