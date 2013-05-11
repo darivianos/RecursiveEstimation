@@ -79,14 +79,17 @@ if (designPart == 1)
         oriVar = knownConst.RotationStartBound * knownConst.RotationStartBound / 6;
         radiusEst = knownConst.NominalWheelRadius;
         radiusVar = knownConst.WheelRadiusError * knownConst.WheelRadiusError / 3;
+        Pinit = [posVar(1),0,0,0;...
+            0,posVar(2),0,0;...
+            0,0,oriVar,0;...
+            0,0,0,radiusVar];
         % Keep the current state to be provided as an input to next iteration
+
         estState.tm = tm;
         estState.posEst = posEst;
         estState.oriEst = oriEst;
-        estState.posVar = posVar;
-        estState.oriVar = oriVar;
         estState.radiusEst = radiusEst;
-        estState.radiusVar = radiusVar;
+        estState.P = Pinit;
         return;
     end
     
@@ -120,17 +123,14 @@ if (designPart == 1)
         0, 0, 0,  -uv * sin(ur)/B;...
         0, 0, 0, 0];
     
-    Pinit = [estState.posVar(1),0,0,0;...
-            0,estState.posVar(2),0,0;...
-            0,0,estState.oriVar,0;...
-            0,0,0,estState.radiusVar];
+    Pinit = estState.P;
   
     [~,Yvar] = ode45(@(t,y) propVariance(t,y,A),[0 Ts],Pinit);
     outSize = size(Yvar,1);
-    Ppred = [Yvar(outSize,1),0,0,0;...
-        0,Yvar(outSize,6),0,0;...
-        0,0,Yvar(outSize,11),0;...
-        0,0,0,Yvar(outSize,16)];
+    Ppred = [Yvar(outSize,1),Yvar(outSize,5),Yvar(outSize,8),Yvar(outSize,13);...
+            Yvar(outSize,2),Yvar(outSize,6),Yvar(outSize,10),Yvar(outSize,14);...
+            Yvar(outSize,3),Yvar(outSize,7),Yvar(outSize,11),Yvar(outSize,15);...
+            Yvar(outSize,4),Yvar(outSize,8),Yvar(outSize,12),Yvar(outSize,16)];
     
     % Update/Measurement Step
     H = [xpred/sqrt(xpred*xpred + ypred*ypred), ypred/sqrt(xpred*xpred + ypred*ypred), 0, 0;...
@@ -169,10 +169,8 @@ if (designPart == 1)
     estState.tm = tm;
     estState.posEst = posEst;
     estState.oriEst = oriEst;
-    estState.posVar = posVar;
-    estState.oriVar = oriVar;
     estState.radiusEst = radiusEst;
-    estState.radiusVar = radiusVar;
+    estState.P = Pmeas;
 end
 
 return
