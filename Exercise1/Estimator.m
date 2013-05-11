@@ -141,6 +141,13 @@ if (designPart == 1)
     
     K = Ppred * H' /(H * Ppred * H' + R);
     Pmeas = (eye(4) - K*H) * Ppred;
+    if sense(1) == inf && sense(2) == inf
+        for i = 1:4
+            Pmeas(i,i) = Ppred(i,i);
+        end
+        sense(1) = sqrt(xpred*xpred + ypred*ypred);
+        sense(2) = rpred;
+    end
     if sense(1) == inf
         Pmeas(1,1) = Ppred(1,1);
         Pmeas(2,2) = Ppred(2,2);
