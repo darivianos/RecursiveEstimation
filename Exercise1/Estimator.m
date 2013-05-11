@@ -127,23 +127,27 @@ if (designPart == 1)
   
     [~,Yvar] = ode45(@(t,y) propVariance(t,y,A),[0 Ts],Pinit);
     outSize = size(Yvar,1);
-    Ppred = [Yvar(outSize,1),Yvar(outSize,2),Yvar(outSize,3),Yvar(outSize,4);...
-        Yvar(outSize,5),Yvar(outSize,6),Yvar(outSize,7),Yvar(outSize,8);...
-        Yvar(outSize,9),Yvar(outSize,10),Yvar(outSize,11),Yvar(outSize,12);...
-        Yvar(outSize,13),Yvar(outSize,14),Yvar(outSize,15),Yvar(outSize,16)];
+    Ppred = [Yvar(outSize,1),0,0,0;...
+        0,Yvar(outSize,6),0,0;...
+        0,0,Yvar(outSize,11),0;...
+        0,0,0,Yvar(outSize,16)];
     
     % Update/Measurement Step
     H = [xpred/sqrt(xpred*xpred + ypred*ypred), ypred/sqrt(xpred*xpred + ypred*ypred), 0, 0;...
         0,0,1,0];
     
-    R = [knownConst.DistNoise*knownConst.DistNoise/3, 0;...
+    R = [knownConst.DistNoise*knownConst.DistNoise/6, 0;...
         0, knownConst.CompassNoise];
     
     K = Ppred * H' /(H * Ppred * H' + R);
+    Pmeas = (eye(4) - K*H) * Ppred;
     if sense(1) == inf
+        Pmeas(1,1) = Ppred(1,1);
+        Pmeas(2,2) = Ppred(2,2);
         sense(1) = sqrt(xpred*xpred + ypred*ypred);
     end
     if sense(2) == inf
+        Pmeas(3,3) = Ppred(3,3);
         sense(2) = rpred;
     end
     
@@ -155,9 +159,7 @@ if (designPart == 1)
     posEst(2) = ypred + temp(2);
     oriEst = rpred + temp(3);
     radiusEst = wpred + temp(4);
-    
-    Pmeas = (eye(4) - K*H) * Ppred;
-    
+   
     posVar(1) = Pmeas(1,1);
     posVar(2) = Pmeas(2,2);
     oriVar = Pmeas(3,3);
