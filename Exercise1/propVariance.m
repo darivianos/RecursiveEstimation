@@ -5,7 +5,6 @@ tempMat = [y(1),y(5),y(9),y(13);...
            y(4),y(8),y(12),y(16)];
 
 tempdy = A*tempMat + tempMat*A' + Q;
-;
 dy = zeros(16,1);
 count = 1;
 for i = 1:4

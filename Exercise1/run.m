@@ -59,12 +59,12 @@ unknownConst = UnknownConstants();
 % Set the random number generator state.
 % Uncomment to make results reproducable. This setting was used to generate
 % the plot in the problem description.
-rand('seed',1);
-randn('seed',1);
-for i = 1:5
-    rand;
-    randn;
-end
+% rand('seed',1);
+% randn('seed',1);
+% for i = 1:2
+%     rand;
+%     randn;
+% end
 
 
 %% Simulation
