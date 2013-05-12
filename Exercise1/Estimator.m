@@ -66,34 +66,34 @@ function [posEst,oriEst,radiusEst, posVar,oriVar,radiusVar,estState] = Estimator
 
 
 
-if (designPart == 1)
-    % Mode 1: Initialization
-    if (tm == 0)
-        % Do the initialization of your estimator here!
-        % We initialize the initial nominal values
-        posEst = [0 0];
-        oriEst = 0;
-        posxVar = knownConst.TranslationStartBound * knownConst.TranslationStartBound / 3;
-        posyVar = posxVar;
-        posVar = [posxVar posyVar];
-        oriVar = knownConst.RotationStartBound * knownConst.RotationStartBound / 6;
-        radiusEst = knownConst.NominalWheelRadius;
-        radiusVar = knownConst.WheelRadiusError * knownConst.WheelRadiusError / 3;
-        Pinit = [posVar(1),0,0,0;...
-            0,posVar(2),0,0;...
-            0,0,oriVar,0;...
-            0,0,0,radiusVar];
-        % Keep the current state to be provided as an input to next iteration
 
-        estState.tm = tm;
-        estState.posEst = posEst;
-        estState.oriEst = oriEst;
-        estState.radiusEst = radiusEst;
-        estState.P = Pinit;
-        return;
-    end
+% Mode 1: Initialization
+if (tm == 0)
+    % Do the initialization of your estimator here!
+    % We initialize the initial nominal values
+    posEst = [0 0];
+    oriEst = 0;
+    posxVar = knownConst.TranslationStartBound * knownConst.TranslationStartBound / 3;
+    posyVar = posxVar;
+    posVar = [posxVar posyVar];
+    oriVar = knownConst.RotationStartBound * knownConst.RotationStartBound / 6;
+    radiusEst = knownConst.NominalWheelRadius;
+    radiusVar = knownConst.WheelRadiusError * knownConst.WheelRadiusError / 3;
+    Pinit = [posVar(1),0,0,0;...
+        0,posVar(2),0,0;...
+        0,0,oriVar,0;...
+        0,0,0,radiusVar];
+    % Keep the current state to be provided as an input to next iteration
     
-    
+    estState.tm = tm;
+    estState.posEst = posEst;
+    estState.oriEst = oriEst;
+    estState.radiusEst = radiusEst;
+    estState.P = Pinit;
+    return;
+end
+
+if (designPart == 1)
     % Mode 2: Estimator iteration.
     
     % Prediction step, solve the three differential equations using ode45
@@ -129,15 +129,17 @@ if (designPart == 1)
     Q(2,2) = 0.1;
     Q(3,3) = .01;
     
+    L = eye(4);
+    
     Pinit = estState.P;
-  
-    [~,Yvar] = ode45(@(t,y) propVariance(t,y,A,Q),[0 Ts],Pinit);
+    
+    [~,Yvar] = ode45(@(t,y) propVariance(t,y,A,Q,L),[0 Ts],Pinit);
     outSize = size(Yvar,1);
     Ppred = [Yvar(outSize,1),Yvar(outSize,2),Yvar(outSize,3),Yvar(outSize,4);...
-            Yvar(outSize,5),Yvar(outSize,6),Yvar(outSize,7),Yvar(outSize,8);...
-            Yvar(outSize,9),Yvar(outSize,10),Yvar(outSize,11),Yvar(outSize,12);...
-            Yvar(outSize,13),Yvar(outSize,14),Yvar(outSize,15),Yvar(outSize,16)];
-        
+        Yvar(outSize,5),Yvar(outSize,6),Yvar(outSize,7),Yvar(outSize,8);...
+        Yvar(outSize,9),Yvar(outSize,10),Yvar(outSize,11),Yvar(outSize,12);...
+        Yvar(outSize,13),Yvar(outSize,14),Yvar(outSize,15),Yvar(outSize,16)];
+    
     % Update/Measurement Step
     H = [xpred/sqrt(xpred*xpred + ypred*ypred), ypred/sqrt(xpred*xpred + ypred*ypred), 0, 0;...
         0,0,1,0];
@@ -169,7 +171,97 @@ if (designPart == 1)
     posEst(2) = ypred + temp(2);
     oriEst = rpred + temp(3);
     radiusEst = wpred + temp(4);
-   
+    
+    posVar(1) = Pmeas(1,1);
+    posVar(2) = Pmeas(2,2);
+    oriVar = Pmeas(3,3);
+    radiusVar = Pmeas(4,4);
+    
+    % Keep the current state to be provided as an input to next iteration
+    estState.tm = tm;
+    estState.posEst = posEst;
+    estState.oriEst = oriEst;
+    estState.radiusEst = radiusEst;
+    estState.P = Pmeas;
+end
+
+if designPart == 2
+
+    % Prediction step, solve the three differential equations using ode45
+    Ts = tm - estState.tm;
+    % previous states
+    xprev = estState.posEst(1);
+    yprev = estState.posEst(2);
+    rprev = estState.oriEst;
+    wprev = estState.radiusEst;
+    
+    % input Signals
+    B = knownConst.WheelBase;
+    uv = actuate(1);
+    ur = actuate(2);
+    
+    % Differential equation for prediction of the states
+    [~,Y] = ode45(@(t,y) propState(t,y,uv,ur,B),[0 Ts],[xprev,yprev,rprev,wprev]);
+    outSize = size(Y,1);
+    xpred = Y(outSize,1);
+    ypred = Y(outSize,2);
+    rpred = Y(outSize,3);
+    wpred = Y(outSize,4);
+    
+    % Differential equation for prediction of Variances
+    A = [0, 0, -wprev*uv*cos(ur)*sin(rprev), uv*cos(ur)*cos(rprev);...
+        0, 0, wprev*uv*cos(ur)*cos(rprev), uv*cos(ur)*sin(rprev);...
+        0, 0, 0,  -uv * sin(ur)/B;...
+        0, 0, 0, 0];
+    
+    % Process Noise Characteristics
+    Q = blkdiag(knownConst.VelocityInputPSD,knownConst.AngleInputPSD);
+    L = [wprev*uv*cos(ur)*cos(rprev), -wprev*uv*sin(ur)*cos(rprev);...
+        wprev*uv*cos(ur)*sin(rprev), -wprev*uv*sin(ur)*sin(rprev);...
+        -wprev*uv*sin(ur)/B, -wprev*uv*cos(ur)/B;...
+        0,0];
+    
+    Pinit = estState.P;
+    
+    [~,Yvar] = ode45(@(t,y) propVariance(t,y,A,Q,L),[0 Ts],Pinit);
+    outSize = size(Yvar,1);
+    Ppred = [Yvar(outSize,1),Yvar(outSize,2),Yvar(outSize,3),Yvar(outSize,4);...
+        Yvar(outSize,5),Yvar(outSize,6),Yvar(outSize,7),Yvar(outSize,8);...
+        Yvar(outSize,9),Yvar(outSize,10),Yvar(outSize,11),Yvar(outSize,12);...
+        Yvar(outSize,13),Yvar(outSize,14),Yvar(outSize,15),Yvar(outSize,16)];
+    
+    % Update/Measurement Step
+    H = [xpred/sqrt(xpred*xpred + ypred*ypred), ypred/sqrt(xpred*xpred + ypred*ypred), 0, 0;...
+        0,0,1,0];
+    if sense(1) == inf && sense(2) == inf
+        H = zeros(2,4);
+        sense(1) = sqrt(xpred*xpred + ypred*ypred);
+        sense(2) = rpred;
+    elseif sense(1) == inf
+        H = [zeros(1,4);...
+            0,0,1,0];
+        sense(1) = sqrt(xpred*xpred + ypred*ypred);
+    elseif sense(2) == inf
+        H = [xpred/sqrt(xpred*xpred + ypred*ypred), ypred/sqrt(xpred*xpred + ypred*ypred), 0, 0;...
+            zeros(1,4)];
+        sense(2) = rpred;
+    end
+    
+    R = [knownConst.DistNoise*knownConst.DistNoise/6, 0;...
+        0, knownConst.CompassNoise];
+    
+    K = Ppred * H' /(H * Ppred * H' + R);
+    Pmeas = (eye(4) - K*H) * Ppred;
+    
+    e = [sense(1) - sqrt(xpred*xpred + ypred*ypred);...
+        sense(2) - rpred];
+    temp = K * e;
+    
+    posEst(1) = xpred + temp(1);
+    posEst(2) = ypred + temp(2);
+    oriEst = rpred + temp(3);
+    radiusEst = wpred + temp(4);
+    
     posVar(1) = Pmeas(1,1);
     posVar(2) = Pmeas(2,2);
     oriVar = Pmeas(3,3);
