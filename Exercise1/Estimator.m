@@ -125,10 +125,9 @@ if (designPart == 1)
     
     % Process Noise Characteristics
     Q = zeros(4,4);
-    Q(1,1) = .05;
-    Q(2,2) = .05;
-    Q(3,3) = .01;
-    Q(4,4) = .00001;
+    Q(1,1) = 0.01;
+    Q(2,2) = 0.01;
+    Q(3,3) = .001;
     
     Pinit = estState.P;
   
@@ -142,29 +141,25 @@ if (designPart == 1)
     % Update/Measurement Step
     H = [xpred/sqrt(xpred*xpred + ypred*ypred), ypred/sqrt(xpred*xpred + ypred*ypred), 0, 0;...
         0,0,1,0];
+    if sense(1) == inf && sense(2) == inf
+        H = zeros(2,4);
+        sense(1) = sqrt(xpred*xpred + ypred*ypred);
+        sense(2) = rpred;
+    elseif sense(1) == inf
+        H = [zeros(1,4);...
+            0,0,1,0];
+        sense(1) = sqrt(xpred*xpred + ypred*ypred);
+    elseif sense(2) == inf
+        H = [xpred/sqrt(xpred*xpred + ypred*ypred), ypred/sqrt(xpred*xpred + ypred*ypred), 0, 0;...
+            zeros(1,4)];
+        sense(2) = rpred;
+    end
     
     R = [knownConst.DistNoise*knownConst.DistNoise/6, 0;...
         0, knownConst.CompassNoise];
     
     K = Ppred * H' /(H * Ppred * H' + R);
     Pmeas = (eye(4) - K*H) * Ppred;
-    if sense(1) == inf && sense(2) == inf
-        Pmeas = Ppred;
-        sense(1) = sqrt(xpred*xpred + ypred*ypred);
-        sense(2) = rpred;
-    end
-    if sense(1) == inf
-        for i = 1:2
-            for j = 1:2
-                Pmeas(i,j) = Ppred(i,j);
-            end
-        end
-        sense(1) = sqrt(xpred*xpred + ypred*ypred);
-    end
-    if sense(2) == inf
-        Pmeas(3,3) = Ppred(3,3);
-        sense(2) = rpred;
-    end
     
     e = [sense(1) - sqrt(xpred*xpred + ypred*ypred);...
         sense(2) - rpred];
