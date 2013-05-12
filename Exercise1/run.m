@@ -122,7 +122,7 @@ legend('true','estimate','start true','end true','start est.','end est.');
 xlabel('x position');
 ylabel('y position');
 title(['position tracking error: ',num2str(trackErrorNorm,6),' m']);
-
+disp(trackErrorNorm);
 
 %%%%%
 % estimation error (incl. standard deviation)

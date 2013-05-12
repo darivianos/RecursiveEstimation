@@ -123,9 +123,16 @@ if (designPart == 1)
         0, 0, 0,  -uv * sin(ur)/B;...
         0, 0, 0, 0];
     
+    % Process Noise Characteristics
+    Q = zeros(4,4);
+    Q(1,1) = .5;
+    Q(2,2) = Q(1,1);
+    Q(3,3) = .01;
+    Q(4,4) = 1e-6;
+    
     Pinit = estState.P;
   
-    [~,Yvar] = ode45(@(t,y) propVariance(t,y,A),[0 Ts],Pinit);
+    [~,Yvar] = ode45(@(t,y) propVariance(t,y,A,Q),[0 Ts],Pinit);
     outSize = size(Yvar,1);
     Ppred = [Yvar(outSize,1),Yvar(outSize,5),Yvar(outSize,8),Yvar(outSize,13);...
             Yvar(outSize,2),Yvar(outSize,6),Yvar(outSize,10),Yvar(outSize,14);...
@@ -142,15 +149,16 @@ if (designPart == 1)
     K = Ppred * H' /(H * Ppred * H' + R);
     Pmeas = (eye(4) - K*H) * Ppred;
     if sense(1) == inf && sense(2) == inf
-        for i = 1:4
-            Pmeas(i,i) = Ppred(i,i);
-        end
+        Pmeas = Ppred;
         sense(1) = sqrt(xpred*xpred + ypred*ypred);
         sense(2) = rpred;
     end
     if sense(1) == inf
-        Pmeas(1,1) = Ppred(1,1);
-        Pmeas(2,2) = Ppred(2,2);
+        for i = 1:2
+            for j = 1:2
+                Pmeas(i,j) = Ppred(i,j);
+            end
+        end
         sense(1) = sqrt(xpred*xpred + ypred*ypred);
     end
     if sense(2) == inf
