@@ -125,9 +125,9 @@ if (designPart == 1)
     
     % Process Noise Characteristics
     Q = zeros(4,4);
-    Q(1,1) = 0.01;
-    Q(2,2) = 0.01;
-    Q(3,3) = .001;
+    Q(1,1) = 0.1;
+    Q(2,2) = 0.1;
+    Q(3,3) = .01;
     
     Pinit = estState.P;
   
