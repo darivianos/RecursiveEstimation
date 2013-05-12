@@ -1,4 +1,4 @@
-function run(designPart)
+function trackErrorNorm = run(designPart)
 % run(designPart)
 %
 % Main function for Extended Kalman Filter programming exercise.
@@ -61,7 +61,7 @@ unknownConst = UnknownConstants();
 % the plot in the problem description.
 rand('seed',1);
 randn('seed',1);
-% for i = 1:2
+% for i = 1:21
 %     rand;
 %     randn;
 % end
@@ -122,7 +122,6 @@ legend('true','estimate','start true','end true','start est.','end est.');
 xlabel('x position');
 ylabel('y position');
 title(['position tracking error: ',num2str(trackErrorNorm,6),' m']);
-disp(trackErrorNorm);
 
 %%%%%
 % estimation error (incl. standard deviation)
